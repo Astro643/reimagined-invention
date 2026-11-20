@@ -1,0 +1,25 @@
+{
+  "name": "controller",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.13.0",
+  "scripts": {
+    "dev": "cross-env NODE_ENV=development node --watch --import remix/node-tsx server.ts",
+    "start": "cross-env NODE_ENV=production node --import remix/node-tsx server.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=24.3.0"
+  },
+  "dependencies": {
+    "@vercel/sandbox": "^4.0.0",
+    "remix": "^3.2.0",
+    "workflow": "^5.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "cross-env": "^10.1.0",
+    "typescript": "^5.8.3"
+  }
+}
