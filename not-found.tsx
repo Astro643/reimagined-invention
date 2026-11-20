@@ -1,0 +1,23 @@
+import type { PageMeta } from "../lib/page.ts"
+import { CONSOLE, Layout, PREFETCH } from "../ui/chrome.tsx"
+
+export const meta: PageMeta = {
+  title: "Page not found · Controller",
+  robots: "noindex",
+  styles: ["/site.css"],
+}
+
+export function NotFoundPage() {
+  return () => (
+    <Layout>
+      <div class="page">
+        <h1>Page not found</h1>
+        <p class="lead">That page does not exist. Head back to the home page or view the docs.</p>
+        <div class="cta">
+          <a class="btn btn-primary" href="/" {...PREFETCH}>Home</a>
+          <a class="btn" href="/docs" {...CONSOLE}>View Docs</a>
+        </div>
+      </div>
+    </Layout>
+  )
+}
