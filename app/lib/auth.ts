@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth"
+import { dash } from "@better-auth/infra"
 import { Pool } from "pg"
 
 const pool = new Pool({
@@ -27,4 +28,9 @@ export const auth = betterAuth({
       },
     },
   },
+  plugins: [
+    // Better Auth Infrastructure: hosted analytics/dashboard. No-op until
+    // BETTER_AUTH_API_KEY is set (key comes from the infra dashboard).
+    dash({ apiKey: process.env.BETTER_AUTH_API_KEY }),
+  ],
 })
