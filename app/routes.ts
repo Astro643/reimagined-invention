@@ -17,6 +17,8 @@ export const routes = route({
   signupSubmit: post("/signup"),
   planView: get("/plan"),
   planSubmit: post("/plan"),
+  resetView: get("/reset"),
+  resetSubmit: post("/reset"),
   logout: post("/logout"),
   dashboard: "/dashboard",
   home: "/",

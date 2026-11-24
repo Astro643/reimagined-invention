@@ -35,6 +35,8 @@ export async function initDb() {
   `
   // Covers databases where "user" was created before the plan column existed.
   await sql`ALTER TABLE "user" ADD COLUMN IF NOT EXISTS plan text`
+  // Recovery phrase hash for password resets (username-only accounts).
+  await sql`ALTER TABLE "user" ADD COLUMN IF NOT EXISTS recovery_hash text`
   await sql`
     CREATE TABLE IF NOT EXISTS "session" (
       id text PRIMARY KEY,
@@ -105,6 +107,39 @@ export async function signupIpAllowed(ip: string) {
 
 export async function recordSignupIp(ip: string) {
   await sql`INSERT INTO signup_attempts (ip) VALUES (${ip})`
+}
+
+export interface UserRow {
+  id: string
+  email: string
+  name: string
+  plan: string | null
+  recovery_hash: string | null
+}
+
+export async function getUserById(id: string) {
+  const rows = await sql`
+    SELECT id, email, name, plan, recovery_hash FROM "user" WHERE id = ${id}
+  `
+  return (rows[0] as UserRow | undefined) ?? null
+}
+
+export async function getUserByEmail(email: string) {
+  const rows = await sql`
+    SELECT id, email, name, plan, recovery_hash FROM "user" WHERE email = ${email}
+  `
+  return (rows[0] as UserRow | undefined) ?? null
+}
+
+export async function setRecoveryHash(userId: string, hash: string) {
+  await sql`UPDATE "user" SET recovery_hash = ${hash}, "updatedAt" = now() WHERE id = ${userId}`
+}
+
+export async function setUserPassword(userId: string, passwordHash: string) {
+  await sql`
+    UPDATE account SET password = ${passwordHash}, "updatedAt" = now()
+    WHERE "userId" = ${userId} AND "providerId" = 'credential'
+  `
 }
 
 export interface RunRow {

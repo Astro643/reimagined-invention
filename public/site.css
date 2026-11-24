@@ -177,3 +177,11 @@ details .ans p+p{margin-top:10px}
 .dash-out{position:fixed;top:84px;right:32px;z-index:5}
 .dash-out .btn{background:var(--surface)}
 @media (max-width:760px){.dash-out{top:72px;right:20px}}
+.cred-block{display:flex;flex-direction:column;gap:6px}
+.cred-label{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.cred-value{font-family:var(--mono,ui-monospace,monospace);font-size:14px;background:var(--canvas);border:1px solid var(--border);border-radius:10px;padding:12px 14px;word-break:break-all;user-select:all}
+.cred-phrase{line-height:1.7;font-size:13px}
+.auth-warn{background:#FFF7E6;border:1px solid #F0D9A8;color:#8a5a00;border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.5}
+.auth-ok{background:#E9F7EF;border:1px solid #B7E4C7;color:#1a7f37;border-radius:10px;padding:10px 14px;font-size:14px}
+.auth-card textarea{font:inherit;font-size:14px;color:var(--ink);background:var(--canvas);border:1px solid var(--border);border-radius:10px;padding:12px 14px;outline:none;resize:vertical}
+.auth-card textarea:focus{border-color:var(--ink);box-shadow:0 0 0 3px rgba(0,0,0,.06)}

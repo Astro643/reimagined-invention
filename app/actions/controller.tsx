@@ -1,8 +1,17 @@
 import { createController } from "remix/router"
 import { redirect } from "remix/response/redirect"
+import { timingSafeEqual } from "node:crypto"
 
 import { assets } from "../assets.ts"
-import { sql, signupIpAllowed, recordSignupIp } from "../lib/db.ts"
+import { sql, signupIpAllowed, recordSignupIp, getUserByEmail, getUserById, setRecoveryHash, setUserPassword } from "../lib/db.ts"
+import {
+  generateRecoveryPhrase,
+  hashRecoveryPhrase,
+  normalizeUsername,
+  usernameToEmail,
+  validUsername,
+} from "../lib/identity.ts"
+import { hashPassword } from "better-auth/crypto"
 import { auth } from "../lib/auth.ts"
 import { routes } from "../routes.ts"
 import { AboutPage, meta as aboutMeta } from "../pages/about.tsx"
@@ -14,7 +23,9 @@ import { NotFoundPage, meta as notFoundMeta } from "../pages/not-found.tsx"
 import { PlanPage, meta as planMeta } from "../pages/plan.tsx"
 import { PrivacyPage, meta as privacyMeta } from "../pages/privacy.tsx"
 import { SignupPage, meta as signupMeta } from "../pages/signup.tsx"
+import { ResetPage, meta as resetMeta } from "../pages/reset.tsx"
 import { TermsPage, meta as termsMeta } from "../pages/terms.tsx"
+import { WelcomePage, meta as welcomeMeta } from "../pages/welcome.tsx"
 import { Document } from "./document.tsx"
 import * as serverActions from "./server.tsx"
 
@@ -101,12 +112,20 @@ export default createController(routes, {
     },
     async loginSubmit(context) {
       const form = await context.request.formData()
-      const email = String(form.get("email") ?? "").trim()
+      const username = normalizeUsername(String(form.get("username") ?? ""))
       const password = String(form.get("password") ?? "")
       const next = safeNext(form.get("next"))
+      if (!validUsername(username)) {
+        return context.render(
+          <Document meta={loginMeta}>
+            <LoginPage error={"Enter your username."} next={next === "/dashboard" ? undefined : next} />
+          </Document>,
+          { status: 400 },
+        )
+      }
       try {
         const result = await auth.api.signInEmail({
-          body: { email, password },
+          body: { email: usernameToEmail(username), password },
           headers: context.request.headers,
           returnHeaders: true,
         })
@@ -134,10 +153,17 @@ export default createController(routes, {
     },
     async signupSubmit(context) {
       const form = await context.request.formData()
-      const email = String(form.get("email") ?? "").trim()
+      const username = normalizeUsername(String(form.get("username") ?? ""))
       const password = String(form.get("password") ?? "")
       const next = safeNext(form.get("next"))
-      const name = email.split("@")[0] || "user"
+      if (!validUsername(username)) {
+        return context.render(
+          <Document meta={signupMeta}>
+            <SignupPage error={"Username must be 3-30 characters: lowercase letters, numbers, dot, dash or underscore."} next={next === "/dashboard" ? undefined : next} />
+          </Document>,
+          { status: 400 },
+        )
+      }
       const ip =
         context.request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
         context.request.headers.get("x-real-ip") ||
@@ -155,18 +181,29 @@ export default createController(routes, {
         // If the limiter table is unavailable, don't block signups — log and continue.
         console.error("[auth] signup ip check failed:", error)
       }
+      const phrase = generateRecoveryPhrase()
       try {
         const result = await auth.api.signUpEmail({
-          body: { name, email, password },
+          body: { name: username, email: usernameToEmail(username), password },
           headers: context.request.headers,
           returnHeaders: true,
         })
         try {
           await recordSignupIp(ip)
+          const userId = (result.response.user as { id?: string } | undefined)?.id
+          if (userId) await setRecoveryHash(userId, hashRecoveryPhrase(phrase))
         } catch (error) {
-          console.error("[auth] signup ip record failed:", error)
+          console.error("[auth] signup ip/hash record failed:", error)
         }
-        return authRedirect("/plan", result.headers)
+        // Show the one-time credentials screen directly, carrying the session
+        // cookie forward so the user is already logged in.
+        const res = context.render(
+          <Document meta={welcomeMeta}>
+            <WelcomePage userId={(result.response.user as { id?: string } | undefined)?.id ?? ""} phrase={phrase} />
+          </Document>,
+        )
+        for (const cookie of getSetCookies(result.headers)) res.headers.append("set-cookie", cookie)
+        return res
       } catch (error) {
         console.error("[auth] signup failed:", error)
         return context.render(
@@ -213,6 +250,50 @@ export default createController(routes, {
       }
       return redirect("/dashboard", 303)
     },
+    async resetView(context) {
+      return context.render(
+        <Document meta={resetMeta}>
+          <ResetPage />
+        </Document>,
+      )
+    },
+    async resetSubmit(context) {
+      const form = await context.request.formData()
+      const userId = String(form.get("user_id") ?? "").trim()
+      const phrase = String(form.get("phrase") ?? "")
+      const password = String(form.get("password") ?? "")
+      const fail = (error: string) =>
+        context.render(
+          <Document meta={resetMeta}>
+            <ResetPage error={error} />
+          </Document>,
+          { status: 400 },
+        )
+      if (!userId || !phrase.trim() || password.length < 8) {
+        return fail("User ID, recovery phrase and an 8+ character password are required.")
+      }
+      try {
+        const user = await getUserById(userId)
+        const expected = user?.recovery_hash
+        const actual = hashRecoveryPhrase(phrase)
+        const ok =
+          !!expected &&
+          expected.length === actual.length &&
+          timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(actual, "hex"))
+        if (!user || !ok) {
+          return fail("That user ID and recovery phrase do not match.")
+        }
+        await setUserPassword(user.id, await hashPassword(password))
+        return context.render(
+          <Document meta={resetMeta}>
+            <ResetPage done />
+          </Document>,
+        )
+      } catch (error) {
+        console.error("[auth] password reset failed:", error)
+        return fail("Could not reset the password right now. Try again.")
+      }
+    },
     async logout(context) {
       try {
         const result = await auth.api.signOut({
@@ -230,7 +311,7 @@ export default createController(routes, {
       if (!user.plan) return redirect("/plan", 303)
       return context.render(
         <Document meta={dashboardMeta}>
-          <DashboardPage />
+          <DashboardPage userId={user.id} />
         </Document>,
       )
     },
