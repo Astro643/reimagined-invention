@@ -54,22 +54,23 @@ export function PlanPage(handle: Handle<PlanPageProps>) {
             </button>
           </form>
         </section>
-        <section class="tier disabled">
+        <section class="tier">
           <div class="tier-head">
             <div>
               <h2>{"Free"}</h2>
-              <span class="price">{"forever · limited"}</span>
+              <span class="price">{"forever · core toolsets"}</span>
             </div>
-            <span class="soon">{"Coming soon"}</span>
           </div>
           <ul>
             {FREE_BENEFITS.map((b) => (
               <li key={b}>{b}</li>
             ))}
           </ul>
-          <form>
-            <button class="btn" type="button" disabled>
-              {"Coming soon"}
+          {error ? <p class="auth-err">{error}</p> : null}
+          <form method="post" action="/plan">
+            <input type="hidden" name="plan" value="free" />
+            <button class="btn" type="submit">
+              {"Start free"}
             </button>
           </form>
         </section>

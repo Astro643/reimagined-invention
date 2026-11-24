@@ -6,7 +6,7 @@ import { APPROVAL_TOOLS } from "../lib/agent-tools.ts"
 import { knowledgeSystem } from "../lib/knowledge.ts"
 import { generate, keyCount, MODELS } from "../lib/gemini.ts"
 import { parsePlan } from "../lib/plan.ts"
-import { createRun, getRun, requestRunCancel, setRunApproval, type RunRow } from "../lib/db.ts"
+import { countRecentRuns, createRun, getRun, requestRunCancel, setRunApproval, type RunRow } from "../lib/db.ts"
 import { resolveRunControl, startAgentRun, startPlanRun } from "../lib/runner.ts"
 
 const MAX_PROMPT = 5000
@@ -42,6 +42,19 @@ async function requireActor(request: Request): Promise<SessionUser | "agent" | n
 function unauthorized() {
   return Response.json({ detail: "Authentication required. Please log in to use the Console." }, { status: 401 })
 }
+
+// Free tier: core toolsets (no browser automation) and a daily run cap.
+// Trial and the operator bearer key are unlimited.
+const FREE_DAILY_RUNS = () => {
+  const n = Number(process.env.FREE_RUNS_PER_DAY ?? 10)
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 10
+}
+
+function isFreeActor(actor: SessionUser | "agent") {
+  return actor !== "agent" && actor.plan === "free"
+}
+
+const FREE_BLOCKED_TOOLS = new Set(["sandbox_browse"])
 
 async function ownedRun(request: Request, id: string): Promise<RunRow | Response> {
   const actor = await requireActor(request)
@@ -153,6 +166,25 @@ export async function agentExecute(context: { request: Request }) {
 
   const runId = crypto.randomUUID()
   const userId = actor === "agent" ? "agent-api" : actor.id
+  if (isFreeActor(actor)) {
+    if (plan.steps.some((step) => FREE_BLOCKED_TOOLS.has(step.tool))) {
+      return Response.json(
+        { detail: "Browser automation requires a Trial plan. Remove sandbox_browse steps or upgrade." },
+        { status: 403 },
+      )
+    }
+    try {
+      const used = await countRecentRuns(userId)
+      if (used >= FREE_DAILY_RUNS()) {
+        return Response.json(
+          { detail: `Free plan allows ${FREE_DAILY_RUNS()} agent runs per day. Try again tomorrow or upgrade to Trial.` },
+          { status: 429 },
+        )
+      }
+    } catch (error) {
+      console.error("run limit check failed:", error)
+    }
+  }
   try {
     await createRun(runId, userId, "agent", plan.prompt, plan)
     startAgentRun(runId)
@@ -235,6 +267,19 @@ export async function execute(context: { request: Request }) {
   if (!actor) return unauthorized()
   const body = await readJson(context.request)
   const userId = actor === "agent" ? "agent-api" : actor.id
+  if (isFreeActor(actor)) {
+    try {
+      const used = await countRecentRuns(userId)
+      if (used >= FREE_DAILY_RUNS()) {
+        return Response.json(
+          { detail: `Free plan allows ${FREE_DAILY_RUNS()} runs per day. Try again tomorrow or upgrade to Trial.` },
+          { status: 429 },
+        )
+      }
+    } catch (error) {
+      console.error("run limit check failed:", error)
+    }
+  }
 
   if (body.plan) {
     const plan = parsePlan(body.plan)

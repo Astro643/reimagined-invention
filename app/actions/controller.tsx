@@ -229,7 +229,7 @@ export default createController(routes, {
       if (!user) return redirect("/login", 303)
       const form = await context.request.formData()
       const plan = String(form.get("plan") ?? "")
-      if (plan !== "trial") {
+      if (plan !== "trial" && plan !== "free") {
         return context.render(
           <Document meta={planMeta}>
             <PlanPage error={"That plan is not available yet."} />

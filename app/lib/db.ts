@@ -135,6 +135,14 @@ export async function setRecoveryHash(userId: string, hash: string) {
   await sql`UPDATE "user" SET recovery_hash = ${hash}, "updatedAt" = now() WHERE id = ${userId}`
 }
 
+export async function countRecentRuns(userId: string) {
+  const rows = await sql`
+    SELECT count(*)::int AS n FROM runs
+    WHERE user_id = ${userId} AND created_at > now() - interval '24 hours'
+  `
+  return (rows[0] as { n: number } | undefined)?.n ?? 0
+}
+
 export async function setUserPassword(userId: string, passwordHash: string) {
   await sql`
     UPDATE account SET password = ${passwordHash}, "updatedAt" = now()
