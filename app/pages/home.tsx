@@ -17,7 +17,7 @@ const PARTS = [
   ],
   [
     "Durable workflows",
-    "Each request runs as a background workflow. It can pause for minutes or hours and pick up again on time, even after you close Discord.",
+    "Each request runs as a durable run. It can pause for approval or run for minutes and pick up again on time, even after you close the Console.",
   ],
   [
     "An executor, not a gambler",
@@ -48,7 +48,7 @@ const CAPABILITIES = [
 ] as const
 
 const SAFEGUARDS = [
-  ["Owner only.", "Only the server owner can use Controller via Discord commands."],
+  ["Owner only.", "Only the account owner can use the Console."],
   ["Never against you.", "The bot refuses to act against the server owner or itself."],
   ["Audited first.", "Requests that look abusive or unclear are rejected before anything runs."],
   [
@@ -66,10 +66,10 @@ function Cta() {
       {inviteHref ? (
         <>
           <a class="btn btn-primary" href={inviteHref}>Add to Discord</a>
-          <a class="btn" href="/docs" {...CONSOLE}>View Docs</a>
+          <a class="btn" href="/dashboard" {...CONSOLE}>Open Console</a>
         </>
       ) : (
-        <a class="btn btn-primary" href="/docs" {...CONSOLE}>View Docs</a>
+        <a class="btn btn-primary" href="/dashboard" {...CONSOLE}>Open Console</a>
       )}
     </div>
   )
@@ -110,7 +110,7 @@ export function HomePage() {
         </h1>
         <p class="lead">
           State a goal in plain language. A dedicated AI agent audits it, researches, decides each next step and acts, a
-          durable workflow keeps it running, and your bot carries out the Discord side, in seconds or across hours.
+          durable run keeps it going, and your bot carries out the Discord side, in seconds or across hours.
         </p>
         <Cta />
         <div class="demo" role="group" aria-label="Example request">
@@ -182,7 +182,7 @@ export function HomePage() {
           </div>
           <div class="step">
             <h3>Let the agents run it</h3>
-            <p>Your agent audits and plans it, the workflow runs it, and the status updates live.</p>
+            <p>Your agent audits and plans it, the run executes it, and the status updates live.</p>
           </div>
         </div>
       </section>

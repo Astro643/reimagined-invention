@@ -43,7 +43,7 @@ export async function api<T = Record<string, never>>(path: string, options: ApiO
 
 /** The message to show for a failed response. */
 export function reason(result: ApiResult<unknown>, fallback: string): string {
-  if (result.status === 401) return "Authentication required. Please use the Discord bot to access Controller."
+  if (result.status === 401) return "Please log in to use the Console."
   return typeof result.data.detail === "string" ? result.data.detail : fallback
 }
 

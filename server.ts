@@ -1,12 +1,39 @@
 import * as http from "node:http"
 import { createRequestListener } from "remix/node-fetch-server"
 
+import { auth } from "./app/lib/auth.ts"
+import { initDb } from "./app/lib/db.ts"
+import { resumeRuns } from "./app/lib/runner.ts"
 import { assets } from "./app/assets.ts"
 import { router } from "./app/router.ts"
 
 const port = Number.parseInt(process.env.PORT ?? "", 10) || 5173
 
-const server = http.createServer(createRequestListener(router.fetch))
+// Postgres can lag behind the web service on cold starts; retry init so auth
+// and runs recover without a manual restart.
+async function boot() {
+  for (let attempt = 1; attempt <= 10; attempt++) {
+    try {
+      await initDb()
+      await resumeRuns()
+      return
+    } catch (error) {
+      console.error(`[boot] init attempt ${attempt} failed:`, error)
+      await new Promise((r) => setTimeout(r, 5000))
+    }
+  }
+  console.error("[boot] giving up on database init; auth and runs will fail until restart")
+}
+void boot()
+
+const server = http.createServer(
+  createRequestListener(async (request) => {
+    if (new URL(request.url).pathname.startsWith("/api/auth/")) {
+      return auth.handler(request)
+    }
+    return router.fetch(request)
+  }),
+)
 
 server.on("error", (error) => {
   console.error(error)

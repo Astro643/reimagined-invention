@@ -1,12 +1,12 @@
-import { generateJson, MODELS } from "./gemini.js";
-import { knowledgeFacts } from "./knowledge.js";
-import { parsePlan, type Plan } from "./plan.js";
+import { generateJson, MODELS } from "./gemini.ts";
+import { knowledgeFacts } from "./knowledge.ts";
+import { parsePlan, type Plan } from "./plan.ts";
 import {
   AGENT_TOOL_GUIDE,
   MAX_TOOL_CALLS,
   parseAgentToolCall,
   type AgentToolCall,
-} from "./agent-tools.js";
+} from "./agent-tools.ts";
 
 export const MAX_AGENT_TURNS = 12;
 

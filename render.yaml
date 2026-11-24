@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: controller
+    runtime: node
+    plan: starter
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/public/status
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "24"
+      - key: PORT
+        value: "10000"
+      # Set these in the Render dashboard (or link your Postgres instance):
+      # DATABASE_URL, BETTER_AUTH_SECRET, BETTER_AUTH_URL,
+      # UPSTASH_BOX_API_KEY, GEMINI_API_KEY,
+      # DISCORD_TOKEN, DISCORD_GUILD_ID, AGENT_API_KEY (optional)

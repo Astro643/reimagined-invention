@@ -1,4 +1,4 @@
-import { get, route } from "remix/routes"
+import { get, post, route } from "remix/routes"
 
 export const routes = route({
   assets: get("/assets/*path"),
@@ -11,6 +11,14 @@ export const routes = route({
   execute: "/api/execute",
   publicStatus: get("/api/public/status"),
   supportChat: "/api/support/chat",
+  loginView: get("/login"),
+  loginSubmit: post("/login"),
+  signupView: get("/signup"),
+  signupSubmit: post("/signup"),
+  planView: get("/plan"),
+  planSubmit: post("/plan"),
+  logout: post("/logout"),
+  dashboard: "/dashboard",
   home: "/",
   privacy: "/privacy",
   terms: "/terms",

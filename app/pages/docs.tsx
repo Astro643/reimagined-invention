@@ -35,8 +35,8 @@ export function DocsPage() {
       <div class="prose">
         <h2 id="getting-started">Getting started</h2>
         <p>
-          Controller is a Discord bot that turns plain-language goals into actions on your server. Add the bot to your
-          server, then use it directly in Discord. No setup screens or passwords needed.
+          Controller turns plain-language goals into actions on your server. Create an account, pick a plan, and open
+          the Console to state your first goal. The agent does the rest.
         </p>
         <p>
           If you need help, use the support chat on this site or ask in your Discord server.
@@ -93,16 +93,16 @@ export function DocsPage() {
 
         <h2 id="how-it-runs">How a request runs</h2>
         <p>
-          When you submit a goal, Controller starts a durable workflow: an isolated Linux sandbox is created for your
-          request, each step runs inside it in order, and the sandbox is destroyed when the plan finishes — nothing is
-          shared between requests. The bot carries out the Discord-side actions, and the workflow records the result of
-          every step so you can see exactly what happened.
+          When you submit a goal, Controller starts a durable run: an isolated execution environment is created for
+          your request, each step runs inside it in order, and the environment is released when the plan finishes —
+          nothing is shared between requests. The agent's Discord toolsets carry out server-side actions, and every
+          step's result is recorded so you can see exactly what happened.
         </p>
 
         <h2 id="safety">Safety</h2>
         <ul>
           <li>
-            <b>Owner only.</b> Only the server owner can use Controller through Discord commands.
+            <b>Owner only.</b> Only the signed-in account owner can run requests in the Console.
           </li>
           <li>
             <b>Never against you.</b> The bot refuses to act against the server owner or itself.

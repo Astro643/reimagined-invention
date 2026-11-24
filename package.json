@@ -13,12 +13,15 @@
     "node": ">=24.3.0"
   },
   "dependencies": {
-    "@vercel/sandbox": "^4.0.0",
-    "remix": "^3.2.0",
-    "workflow": "^5.5.0"
+    "@upstash/box": "^0.8.1",
+    "better-auth": "^1.7.27",
+    "pg": "^8.23.1",
+    "postgres": "^4.1.1",
+    "remix": "^3.2.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/pg": "^8.23.1",
     "cross-env": "^10.1.0",
     "typescript": "^5.8.3"
   }

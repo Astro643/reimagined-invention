@@ -1,10 +1,19 @@
 const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
-const API_KEY = process.env.GEMINI_API_KEY ?? "";
+
+const KEYS = [
+  ...(process.env.GEMINI_API_KEYS ?? "").split(","),
+  process.env.GEMINI_API_KEY ?? "",
+  ...[1, 2, 3, 4].map((n) => process.env[`GEMINI_API_KEY_${n}`] ?? ""),
+]
+  .map((k) => k.trim())
+  .filter(Boolean);
+
+let cursor = 0;
 
 export const MODELS = {
-  agent: "gemini-4-hydrogen",
-  decision: "gemini-decision-1",
-  support: "gemini-flash-latest",
+  agent: process.env.MODEL_AGENT ?? "gemini-4-hydrogen",
+  decision: process.env.MODEL_DECISION ?? "gemini-decision-1",
+  support: process.env.MODEL_SUPPORT ?? "gemini-flash-latest",
 } as const;
 
 const FALLBACK_MODELS = [
@@ -16,7 +25,7 @@ const FALLBACK_MODELS = [
 const SUPPORT_FALLBACK = "gemini-flash-lite-latest";
 
 export function keyCount() {
-  return API_KEY ? 1 : 0;
+  return KEYS.length;
 }
 
 type GeminiError = Error & { status?: number; quota?: boolean };
@@ -27,40 +36,52 @@ export const isQuota = (e: unknown) =>
   /RESOURCE_EXHAUSTED|quota|rate/i.test(String((e as Error)?.message ?? ""));
 
 async function callModel(model: string, prompt: string, system?: string, json = false): Promise<string> {
-  if (!API_KEY) throw new Error("GEMINI_API_KEY is not configured");
+  if (!KEYS.length) throw new Error("GEMINI_API_KEY is not configured");
 
   const contents = [
     ...(system ? [{ role: "user", parts: [{ text: `System: ${system}` }] }] : []),
     { role: "user", parts: [{ text: prompt }] },
   ];
 
-  const res = await fetch(`${BASE}/${model}:generateContent?key=${API_KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents,
-      generationConfig: {
-        ...(json ? { responseMimeType: "application/json" } : {}),
-        temperature: 0.7,
-      },
-    }),
-    signal: AbortSignal.timeout(90_000),
-  });
+  let lastError: unknown;
+  for (let n = 0; n < KEYS.length; n++) {
+    const key = KEYS[(cursor + n) % KEYS.length];
+    cursor = (cursor + n + 1) % KEYS.length;
+    try {
+      const res = await fetch(`${BASE}/${model}:generateContent?key=${key}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents,
+          generationConfig: {
+            ...(json ? { responseMimeType: "application/json" } : {}),
+            temperature: 0.7,
+          },
+        }),
+        signal: AbortSignal.timeout(90_000),
+      });
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    const error: GeminiError = new Error(`Gemini ${res.status}: ${text.slice(0, 500)}`);
-    error.status = res.status;
-    error.quota = res.status === 429;
-    throw error;
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        const error: GeminiError = new Error(`Gemini ${res.status}: ${text.slice(0, 500)}`);
+        error.status = res.status;
+        error.quota = res.status === 429;
+        throw error;
+      }
+
+      const data = (await res.json()) as {
+        candidates?: { content?: { parts?: { text?: string }[] } }[];
+      };
+      const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+      if (!text.trim()) throw new Error("Gemini returned an empty response");
+      return text.trim();
+    } catch (error) {
+      lastError = error;
+      // Quota errors move on to the next key; anything else is fatal for this model.
+      if (!isQuota(error)) throw error;
+    }
   }
-
-  const data = (await res.json()) as {
-    candidates?: { content?: { parts?: { text?: string }[] } }[];
-  };
-  const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-  if (!text.trim()) throw new Error("Gemini returned an empty response");
-  return text.trim();
+  throw lastError;
 }
 
 async function generateWithFallback(

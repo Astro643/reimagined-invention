@@ -92,7 +92,7 @@ export function Header() {
           <a href="/docs" {...PREFETCH}>Docs</a>
           <a href="/about" {...PREFETCH}>About</a>
         </nav>
-        <a class="btn btn-primary btn-sm" href="/docs" {...CONSOLE}>View Docs</a>
+        <a class="btn btn-primary btn-sm" href="/dashboard" {...CONSOLE}>Open Console</a>
       </div>
     </header>
   )
@@ -112,7 +112,7 @@ export function Footer() {
           </div>
           <div class="links">
             <h4>Product</h4>
-            <a href="/docs" {...CONSOLE}>Docs</a>
+            <a href="/dashboard" {...CONSOLE}>Console</a>
             <a href="/docs" {...PREFETCH}>Docs</a>
             <a href="/about" {...PREFETCH}>About</a>
             {inviteHref ? <a href={inviteHref}>Add to Discord</a> : null}

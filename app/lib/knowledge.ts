@@ -1,8 +1,8 @@
-import { keyCount } from "./gemini.js";
+import { keyCount } from "./gemini.ts";
 
 const FACTS = [
-  "Product: Controller — agentic automation for Discord servers. Users interact with the bot directly in Discord to run tasks, inspect status, and cancel requests.",
-  "Agent flow: describe a goal in plain language -> the agent creates a plan -> the workflow executes it -> status updates are shown in Discord.",
+  "Product: Controller — agentic automation for Discord servers. Users sign in on the website, open the Console, and describe goals in plain language to run tasks, inspect status, and cancel requests.",
+  "Agent flow: describe a goal in plain language -> the agent creates a plan -> the run executes it -> live status updates are shown in the Console.",
   "Request statuses and their exact meanings:",
   "- Processing: the plan is running right now.",
   "- Completed: every step finished. The result note shows what was done.",
@@ -26,7 +26,7 @@ export function knowledgeFacts() {
   const keys = keyCount();
   const status =
     keys > 0
-      ? `Live status: All systems operational (${keys} Gemini API key configured).`
+      ? `Live status: All systems operational (${keys} Gemini API key${keys === 1 ? "" : "s"} configured).`
       : "Live status: DEGRADED — GEMINI_API_KEY is not configured, so AI features may fail right now.";
   return `${FACTS}\n\n${status}`;
 }

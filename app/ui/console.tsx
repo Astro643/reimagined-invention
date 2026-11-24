@@ -284,6 +284,7 @@ export const Console = clientEntry(import.meta.url, function Console(handle: Han
   let polling = false
   let pausedUntil = 0
   let isOpen = false
+  let opening = false
   let panel: HTMLElement | undefined
   let returnTo: HTMLElement | null = null
   const cancelling = new Set<string>()
@@ -315,12 +316,28 @@ export const Console = clientEntry(import.meta.url, function Console(handle: Han
   // The Console is an overlay on whatever page the person is on. It stays mounted while closed,
   // so requests keep being tracked and the latest status is there when it opens again.
   const open = () => {
-    if (isOpen) return
-    isOpen = true
-    returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    document.documentElement.style.overflow = "hidden"
-    refresh()
-    setTimeout(focusInput, 30)
+    if (isOpen || opening) return
+    opening = true
+    // The agent API needs an account. Send logged-out visitors to sign in first.
+    fetch("/api/auth/get-session", { credentials: "same-origin", cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : undefined))
+      .then((data) => {
+        opening = false
+        // Only a definitive "no session" response redirects; errors fall through
+        // and the API's own 401 handling takes over.
+        if (data === null) {
+          window.location.assign("/login?next=" + encodeURIComponent("/dashboard"))
+          return
+        }
+        isOpen = true
+        returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : null
+        document.documentElement.style.overflow = "hidden"
+        refresh()
+        setTimeout(focusInput, 30)
+      })
+      .catch(() => {
+        opening = false
+      })
   }
 
   const close = () => {
@@ -589,6 +606,9 @@ export const Console = clientEntry(import.meta.url, function Console(handle: Han
     )
 
     poll()
+
+    // /dashboard is the console's home: open the overlay right away.
+    if (window.location.pathname === "/dashboard") open()
   })
 
   const rows = () =>
