@@ -244,8 +244,14 @@ async function runPlan(runId: string) {
   await saveRunState(runId, state)
 
   const env: Record<string, string> = {}
-  if (process.env.DISCORD_TOKEN) env.DISCORD_TOKEN = process.env.DISCORD_TOKEN
-  const box = await getOrCreateBox(runId, env)
+  const discordToken = process.env.DISCORD_TOKEN
+  if (discordToken) env.DISCORD_TOKEN = discordToken
+  // Plan steps are arbitrary shell commands: when the box holds the Discord
+  // token, lock egress to Discord domains so it cannot be exfiltrated, and
+  // scrub the token from anything a step prints.
+  const box = await getOrCreateBox(runId, env, { restrictEgress: Boolean(discordToken) })
+  const scrub = (text: string) =>
+    discordToken ? text.split(discordToken).join("[redacted]") : text
 
   try {
     while (state.index < plan.steps.length) {
@@ -259,7 +265,7 @@ async function runPlan(runId: string) {
         state.results.push({ label: step.label, ok: false, detail: `Invalid curl command: ${curl.error}` })
       } else {
         const res = await runBoxCommand(box, step.action, PLAN_STEP_TIMEOUT_MS)
-        state.results.push({ label: step.label, ok: res.ok, detail: res.output })
+        state.results.push({ label: step.label, ok: res.ok, detail: scrub(res.output) })
       }
       state.index += 1
       await saveRunState(runId, state)

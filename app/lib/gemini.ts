@@ -114,6 +114,9 @@ export async function generate(model: string, prompt: string, system?: string) {
 }
 
 export async function generateJson<T>(model: string, prompt: string, system: string): Promise<T> {
-  const text = await generateWithFallback(model, prompt, system, true, model === MODELS.support);
+  let text = await generateWithFallback(model, prompt, system, true, model === MODELS.support);
+  // Models sometimes wrap JSON in markdown fences despite responseMimeType.
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
+  if (fenced) text = fenced[1].trim();
   return JSON.parse(text) as T;
 }

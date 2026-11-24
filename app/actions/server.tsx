@@ -118,7 +118,7 @@ export async function agentPreview(context: { request: Request }) {
   if (!actor) return unauthorized()
   const body = await readJson(context.request)
   if (!validPrompt(body.prompt)) {
-    return Response.json({ detail: "prompt must be a non-empty string of at most 2000 characters" }, { status: 400 })
+    return Response.json({ detail: `prompt must be a non-empty string of at most ${MAX_PROMPT} characters` }, { status: 400 })
   }
   try {
     const plan = await generateAgentPlan(String(body.prompt).trim())
@@ -291,7 +291,30 @@ export async function publicStatus() {
   })
 }
 
+// supportChat is public (the widget sits on marketing pages), so it needs its
+// own abuse guard: Gemini spend is metered per IP.
+const chatHits = new Map<string, number[]>()
+const CHAT_LIMIT = 20
+const CHAT_WINDOW_MS = 60_000
+
+function chatAllowed(ip: string) {
+  const now = Date.now()
+  const hits = (chatHits.get(ip) ?? []).filter((t) => now - t < CHAT_WINDOW_MS)
+  if (hits.length >= CHAT_LIMIT) {
+    chatHits.set(ip, hits)
+    return false
+  }
+  hits.push(now)
+  chatHits.set(ip, hits)
+  if (chatHits.size > 5000) chatHits.clear()
+  return true
+}
+
 export async function supportChat(context: { request: Request }) {
+  const ip = context.request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local"
+  if (!chatAllowed(ip)) {
+    return Response.json({ detail: "Too many messages. Please try again in a minute." }, { status: 429 })
+  }
   const body = await readJson(context.request)
   const message = typeof body.message === "string" ? body.message.trim().slice(0, MAX_CHAT) : ""
   if (!message) {

@@ -17,7 +17,24 @@ const clip = (s: string, max = 6000) => (s.length > max ? s.slice(0, max) + "…
 // One persistent Box per run: shell steps run through exec, and the
 // headless Chromium (browser: true) serves browser-automation tools.
 // The box id is stored in Postgres so a restarted process can re-attach.
-export async function getOrCreateBox(runId: string, env?: Record<string, string>): Promise<Box> {
+// Egress allowlist for boxes that hold secrets (DISCORD_TOKEN). Plan steps are
+// arbitrary shell commands, so network policy — not input filtering — is what
+// actually prevents token exfiltration to attacker-controlled hosts.
+const DISCORD_EGRESS = {
+  mode: "custom" as const,
+  allowedDomains: [
+    "discord.com",
+    "discordapp.com",
+    "cdn.discordapp.com",
+    "media.discordapp.net",
+  ],
+}
+
+export async function getOrCreateBox(
+  runId: string,
+  env?: Record<string, string>,
+  opts?: { restrictEgress?: boolean },
+): Promise<Box> {
   const existing = await kvGet<string>(BOX_KEY(runId))
   if (existing) {
     const box = await Box.get(existing)
@@ -31,6 +48,7 @@ export async function getOrCreateBox(runId: string, env?: Record<string, string>
     browser: true,
     size: "small",
     ...(env && Object.keys(env).length ? { env } : {}),
+    ...(opts?.restrictEgress ? { networkPolicy: DISCORD_EGRESS } : {}),
   })
   await kvSet(BOX_KEY(runId), box.id)
   return box
