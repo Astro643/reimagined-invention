@@ -17,17 +17,42 @@ const clip = (s: string, max = 6000) => (s.length > max ? s.slice(0, max) + "…
 // One persistent Box per run: shell steps run through exec, and the
 // headless Chromium (browser: true) serves browser-automation tools.
 // The box id is stored in Postgres so a restarted process can re-attach.
-// Egress allowlist for boxes that hold secrets (DISCORD_TOKEN). Plan steps are
-// arbitrary shell commands, so network policy — not input filtering — is what
-// actually prevents token exfiltration to attacker-controlled hosts.
-const DISCORD_EGRESS = {
+// Egress allowlist for boxes that hold secrets (DISCORD_TOKEN). Plan/exec
+// steps are arbitrary shell commands, so network policy — not input
+// filtering — is what actually prevents token exfiltration to
+// attacker-controlled hosts. Extra domains can be added without a deploy via
+// PLAN_BOX_ALLOWED_DOMAINS (comma-separated).
+const BASE_EGRESS = [
+  // Discord API + CDN
+  "discord.com",
+  "discordapp.com",
+  "cdn.discordapp.com",
+  "media.discordapp.net",
+  // Package registries / dev hosts (npm install, git clone, pip, apt)
+  "registry.npmjs.org",
+  "npmjs.com",
+  "github.com",
+  "api.github.com",
+  "raw.githubusercontent.com",
+  "objects.githubusercontent.com",
+  "codeload.github.com",
+  "nodejs.org",
+  "pypi.org",
+  "files.pythonhosted.org",
+  "deb.debian.org",
+  "security.debian.org",
+  "archive.ubuntu.com",
+  "security.ubuntu.com",
+]
+
+const extraEgress = (process.env.PLAN_BOX_ALLOWED_DOMAINS ?? "")
+  .split(",")
+  .map((d) => d.trim().toLowerCase())
+  .filter(Boolean)
+
+const PLAN_BOX_EGRESS = {
   mode: "custom" as const,
-  allowedDomains: [
-    "discord.com",
-    "discordapp.com",
-    "cdn.discordapp.com",
-    "media.discordapp.net",
-  ],
+  allowedDomains: [...BASE_EGRESS, ...extraEgress],
 }
 
 export async function getOrCreateBox(
@@ -48,7 +73,7 @@ export async function getOrCreateBox(
     browser: true,
     size: "small",
     ...(env && Object.keys(env).length ? { env } : {}),
-    ...(opts?.restrictEgress ? { networkPolicy: DISCORD_EGRESS } : {}),
+    ...(opts?.restrictEgress ? { networkPolicy: PLAN_BOX_EGRESS } : {}),
   })
   await kvSet(BOX_KEY(runId), box.id)
   return box

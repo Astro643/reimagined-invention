@@ -2,6 +2,7 @@ import { auth } from "../lib/auth.ts"
 import { sql } from "../lib/db.ts"
 import { ping } from "../lib/store.ts"
 import { generateAgentPlan, generateAgentResponse, parseAgentPlanInput } from "../lib/agent.ts"
+import { APPROVAL_TOOLS } from "../lib/agent-tools.ts"
 import { knowledgeSystem } from "../lib/knowledge.ts"
 import { generate, keyCount, MODELS } from "../lib/gemini.ts"
 import { parsePlan } from "../lib/plan.ts"
@@ -121,8 +122,22 @@ export async function agentPreview(context: { request: Request }) {
     return Response.json({ detail: `prompt must be a non-empty string of at most ${MAX_PROMPT} characters` }, { status: 400 })
   }
   try {
-    const plan = await generateAgentPlan(String(body.prompt).trim())
-    return Response.json(plan)
+    const result = await generateAgentPlan(String(body.prompt).trim())
+    // The console expects {complete, agent_plan, steps, question}; the agent
+    // returns {type:"plan"|"answer"}. Map between the two contracts here.
+    if (result.type === "answer") {
+      return Response.json({ complete: false, incomplete: true, question: result.answer })
+    }
+    return Response.json({
+      complete: true,
+      summary: result.summary,
+      steps: result.steps.map((step) => ({
+        label: step.label,
+        action: step.tool,
+        requires_confirmation: APPROVAL_TOOLS.has(step.tool),
+      })),
+      agent_plan: result,
+    })
   } catch (error) {
     console.error("agent preview failed:", error)
     return Response.json({ detail: "Could not generate agent preview right now." }, { status: 503 })
