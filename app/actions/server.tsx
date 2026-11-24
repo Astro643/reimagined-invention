@@ -263,14 +263,31 @@ export async function publicStatus() {
   }
   const [storeUp, dbUp] = await Promise.all([check(ping()), check(sql`SELECT 1`)])
   const keys = keyCount()
+  const components = [
+    {
+      name: "Agent store",
+      detail: storeUp ? "Postgres goal store reachable" : "Postgres goal store unreachable",
+      status: storeUp ? "operational" : "outage",
+    },
+    {
+      name: "Database",
+      detail: dbUp ? "Postgres reachable" : "Postgres unreachable",
+      status: dbUp ? "operational" : "outage",
+    },
+    {
+      name: "AI models",
+      detail: keys > 0 ? `${keys} Gemini key${keys === 1 ? "" : "s"} configured` : "No Gemini API key configured",
+      status: keys > 0 ? "operational" : "outage",
+    },
+  ]
   const ok = storeUp && dbUp && keys > 0
   return Response.json({
+    overall: ok ? "operational" : "degraded",
+    label: ok ? "All systems operational" : "Degraded — some services are impaired",
+    updated: new Date().toISOString(),
+    components,
     status: ok ? "operational" : "degraded",
-    message: ok
-      ? "All systems operational"
-      : !keys
-        ? "Degraded — GEMINI_API_KEY is not configured"
-        : "Degraded — a backend dependency is unavailable",
+    message: ok ? "All systems operational" : "Degraded — a backend dependency is unavailable",
   })
 }
 
