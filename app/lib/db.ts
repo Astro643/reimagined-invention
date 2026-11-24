@@ -82,6 +82,29 @@ export async function initDb() {
       "updatedAt" timestamptz NOT NULL DEFAULT now()
     )
   `
+  // Signup rate limiting: one row per successful account creation, keyed by IP.
+  await sql`
+    CREATE TABLE IF NOT EXISTS signup_attempts (
+      id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      ip text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+  `
+  await sql`CREATE INDEX IF NOT EXISTS signup_attempts_ip_time ON signup_attempts (ip, created_at)`
+}
+
+const SIGNUP_IP_LIMIT = 3
+
+export async function signupIpAllowed(ip: string) {
+  const rows = await sql`
+    SELECT count(*)::int AS n FROM signup_attempts
+    WHERE ip = ${ip} AND created_at > now() - interval '24 hours'
+  `
+  return ((rows[0] as { n: number } | undefined)?.n ?? 0) < SIGNUP_IP_LIMIT
+}
+
+export async function recordSignupIp(ip: string) {
+  await sql`INSERT INTO signup_attempts (ip) VALUES (${ip})`
 }
 
 export interface RunRow {

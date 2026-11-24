@@ -2,7 +2,7 @@ import { createController } from "remix/router"
 import { redirect } from "remix/response/redirect"
 
 import { assets } from "../assets.ts"
-import { sql } from "../lib/db.ts"
+import { sql, signupIpAllowed, recordSignupIp } from "../lib/db.ts"
 import { auth } from "../lib/auth.ts"
 import { routes } from "../routes.ts"
 import { AboutPage, meta as aboutMeta } from "../pages/about.tsx"
@@ -138,12 +138,34 @@ export default createController(routes, {
       const password = String(form.get("password") ?? "")
       const next = safeNext(form.get("next"))
       const name = email.split("@")[0] || "user"
+      const ip =
+        context.request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+        context.request.headers.get("x-real-ip") ||
+        "unknown"
+      try {
+        if (!(await signupIpAllowed(ip))) {
+          return context.render(
+            <Document meta={signupMeta}>
+              <SignupPage error={"Too many accounts were created from this network. Try again later."} next={next === "/dashboard" ? undefined : next} />
+            </Document>,
+            { status: 429 },
+          )
+        }
+      } catch (error) {
+        // If the limiter table is unavailable, don't block signups — log and continue.
+        console.error("[auth] signup ip check failed:", error)
+      }
       try {
         const result = await auth.api.signUpEmail({
           body: { name, email, password },
           headers: context.request.headers,
           returnHeaders: true,
         })
+        try {
+          await recordSignupIp(ip)
+        } catch (error) {
+          console.error("[auth] signup ip record failed:", error)
+        }
         return authRedirect("/plan", result.headers)
       } catch (error) {
         console.error("[auth] signup failed:", error)
