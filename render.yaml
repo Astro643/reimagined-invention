@@ -15,5 +15,6 @@ services:
         value: "10000"
       # Set these in the Render dashboard (or link your Postgres instance):
       # DATABASE_URL, BETTER_AUTH_SECRET, BETTER_AUTH_URL,
-      # UPSTASH_BOX_API_KEY, GEMINI_API_KEY,
-      # DISCORD_TOKEN, DISCORD_GUILD_ID, AGENT_API_KEY (optional)
+      # MSB_API_KEY + MSB_BACKEND=remote, STEEL_API_KEY,
+      # POSTMARK_API_KEY + POSTMARK_FROM,
+      # GEMINI_API_KEY, DISCORD_TOKEN, DISCORD_GUILD_ID, AGENT_API_KEY (optional)

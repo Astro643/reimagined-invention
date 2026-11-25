@@ -87,7 +87,7 @@ function isFreeActor(actor: SessionUser | "agent" | "unverified") {
   return actor !== "agent" && actor !== "unverified" && effectivePlan(actor) === "free"
 }
 
-const FREE_BLOCKED_TOOLS = new Set(["sandbox_browse"])
+const FREE_BLOCKED_TOOLS = new Set(["sandbox_browse", "sandbox_exec"])
 
 async function ownedRun(request: Request, id: string): Promise<RunRow | Response> {
   const actor = await actorOrDeny(request)

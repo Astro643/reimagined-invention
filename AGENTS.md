@@ -39,13 +39,18 @@ Single Remix 3.2.0 app: marketing site + Console overlay + agent backend
   (`runs`, Better Auth tables, `goal_kv`, `signup_attempts`) and
   `app/lib/store.ts` (kv). `purgeStale()` runs hourly + at boot: expired
   sessions/verification rows and finished runs older than 30 days.
-- Execution: Upstash Box per run (`browser: true` → headless Chromium for the
-  `sandbox_browse` tool); box id persisted in `goal_kv` for crash resume.
+- Execution: microsandbox microVM per run (`app/lib/box.ts`, managed cloud via
+  `MSB_API_KEY`+`MSB_BACKEND=remote`); sandbox name persisted in `goal_kv` for
+  crash resume. `sandbox_browse` uses steel.dev sessions (`STEEL_API_KEY`,
+  high-level commands API — no Playwright needed); `sandbox_exec` runs shell
+  commands in the same microVM (trial-only, like browse). Plan boxes holding
+  DISCORD_TOKEN get an egress allowlist + destination-bound secret injection
+  (token never enters the guest).
 - Bot-facing JSON API also accepts `Authorization: Bearer $AGENT_API_KEY`.
 
 ## Env vars (see .env.example)
 
-`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `BETTER_AUTH_API_KEY` (optional, infra dashboard), `POSTMARK_API_KEY`, `POSTMARK_FROM`, `UPSTASH_BOX_API_KEY`,
+`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `BETTER_AUTH_API_KEY` (optional, infra dashboard), `POSTMARK_API_KEY`, `POSTMARK_FROM`, `MSB_API_KEY`, `MSB_BACKEND`, `MSB_IMAGE` (optional), `STEEL_API_KEY`,
 `GEMINI_API_KEY` (or `GEMINI_API_KEYS`/`GEMINI_API_KEY_1..4`), `DISCORD_TOKEN`,
 `DISCORD_GUILD_ID`, optional `AGENT_API_KEY`, `MODEL_*`, `PORT`, `NODE_ENV`.
 

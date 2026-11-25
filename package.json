@@ -14,11 +14,13 @@
   },
   "dependencies": {
     "@better-auth/infra": "^0.4.31",
-    "@upstash/box": "^0.8.1",
     "better-auth": "^1.7.27",
+    "microsandbox": "^0.8.2",
     "pg": "^8.23.1",
+    "playwright-core": "^1.65.0",
     "postgres": "^4.1.1",
-    "remix": "^3.2.0"
+    "remix": "^3.2.0",
+    "steel-sdk": "^0.23.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

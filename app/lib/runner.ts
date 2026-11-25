@@ -243,13 +243,15 @@ async function runPlan(runId: string) {
   const state = initialPlanState(run)
   await saveRunState(runId, state)
 
-  const env: Record<string, string> = {}
   const discordToken = process.env.DISCORD_TOKEN
-  if (discordToken) env.DISCORD_TOKEN = discordToken
   // Plan steps are arbitrary shell commands: when the box holds the Discord
-  // token, lock egress to Discord domains so it cannot be exfiltrated, and
-  // scrub the token from anything a step prints.
-  const box = await getOrCreateBox(runId, env, { restrictEgress: Boolean(discordToken) })
+  // token, lock egress to Discord+package domains so it cannot be
+  // exfiltrated, inject the token as a destination-bound secret (the real
+  // value never enters the guest), and scrub it from step output anyway.
+  const box = await getOrCreateBox(runId, {
+    secrets: discordToken ? { DISCORD_TOKEN: discordToken } : undefined,
+    restrictEgress: Boolean(discordToken),
+  })
   const scrub = (text: string) =>
     discordToken ? text.split(discordToken).join("[redacted]") : text
 
