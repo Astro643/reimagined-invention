@@ -8,12 +8,17 @@ const pool = new Pool({
   idleTimeoutMillis: 20_000,
 })
 
+// Development falls back to a throwaway secret so the server still boots without env vars.
+// Production must set BETTER_AUTH_SECRET: signing sessions with a published default would let anyone forge one.
+const secret = process.env.BETTER_AUTH_SECRET
+if (!secret && process.env.NODE_ENV === "production") {
+  throw new Error("BETTER_AUTH_SECRET must be set when NODE_ENV=production")
+}
+
 export const auth = betterAuth({
   appName: "Controller",
   baseURL: process.env.BETTER_AUTH_URL,
-  // Falls back to a dev-only secret so the server still boots without env
-  // vars; production deploys must set BETTER_AUTH_SECRET.
-  secret: process.env.BETTER_AUTH_SECRET ?? "dev-only-insecure-secret-do-not-use-in-prod",
+  secret: secret ?? "dev-only-insecure-secret-do-not-use-in-prod",
   database: pool,
   emailAndPassword: {
     enabled: true,

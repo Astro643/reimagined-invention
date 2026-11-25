@@ -143,6 +143,20 @@ export async function countRecentRuns(userId: string) {
   return (rows[0] as { n: number } | undefined)?.n ?? 0
 }
 
+/**
+ * Deletes data that has outlived its purpose: expired sessions and verification rows, and finished runs older than 30 days (the retention the privacy policy states).
+ * Runs that are still processing or awaiting approval are never touched.
+ */
+export async function purgeStale() {
+  await sql`DELETE FROM "session" WHERE "expiresAt" < now()`
+  await sql`DELETE FROM "verification" WHERE "expiresAt" < now()`
+  await sql`
+    DELETE FROM runs
+    WHERE status NOT IN ('processing', 'awaiting_approval')
+      AND updated_at < now() - interval '30 days'
+  `
+}
+
 export async function setUserPassword(userId: string, passwordHash: string) {
   await sql`
     UPDATE account SET password = ${passwordHash}, "updatedAt" = now()

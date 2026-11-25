@@ -1,7 +1,6 @@
 import type { PageMeta } from "../lib/page.ts"
 import { inviteHref } from "../lib/site-config.ts"
-import { CONSOLE, Layout } from "../ui/chrome.tsx"
-import { ScrollCue } from "../ui/scroll-cue.tsx"
+import { CONSOLE, Layout, PREFETCH } from "../ui/chrome.tsx"
 
 export const meta: PageMeta = {
   title: "Controller · Agentic infrastructure for Discord",
@@ -17,7 +16,7 @@ const PARTS = [
   ],
   [
     "Durable workflows",
-    "Each request runs as a durable run. It can pause for approval or run for minutes and pick up again on time, even after you close the Console.",
+    "Each request runs as a durable run. It can pause for your approval or run for minutes, and it keeps going after you close the Console.",
   ],
   [
     "An executor, not a gambler",
@@ -25,7 +24,7 @@ const PARTS = [
   ],
   [
     "Visible end to end",
-    "Live status for every request, and a live status card for the bot, each agent and the task engine, right in the corner of the site.",
+    "Live status for every request, and a live system status card right in the corner of the site.",
   ],
 ] as const
 
@@ -34,16 +33,8 @@ const CAPABILITIES = [
   ["Roles", "Make roles with exactly the permissions you choose, then hand them out or take them back."],
   ["Moderation", "Kick, ban, time out or rename members, people and bots alike, simply by their display name."],
   [
-    "Scheduled work",
-    "Ask for something to happen later, such as locking a channel in two hours. Waits can last up to 12 hours in total.",
-  ],
-  [
-    "Research and automation",
-    "Search the web, write the summary, post it to Discord, email it to you or call your own webhooks, all from one goal.",
-  ],
-  [
-    "Anything Discord allows",
-    "Beyond the built-in actions, agents can use Discord itself for threads, events, invites, emojis and more.",
+    "Research",
+    "Search the web, read pages, write the summary and post it to Discord, all from one goal.",
   ],
 ] as const
 
@@ -52,12 +43,18 @@ const SAFEGUARDS = [
   ["Never against you.", "The bot refuses to act against the server owner or itself."],
   ["Audited first.", "Requests that look abusive or unclear are rejected before anything runs."],
   [
-    "Web content cannot take control.",
-    "Once an agent has read the web, destructive actions like bans and deletes are blocked for that request.",
+    "You approve the risky steps.",
+    "Deleting channels or roles, kicking or banning members and changing permissions pause until you approve them.",
   ],
   ["Fails safe.", "If an agent and its backup model are both unavailable, nothing runs."],
-  ["Cancel while waiting.", "A request paused for a scheduled step can be cancelled any time before it resumes."],
+  ["Cancel any time.", "Stop a request from the Console whenever you like. Steps that already ran are not undone."],
   ["Capped.", "A single request is limited in size, so one mistake cannot snowball."],
+] as const
+
+const STEPS = [
+  ["Add the bot", 'Click "Add to Discord" to install the bot in your server. No configuration needed.'],
+  ["State the goal", "Write it the way you would tell a person. No commands to learn."],
+  ["Let the agents run it", "Your agent audits and plans it, the run executes it, and the status updates live."],
 ] as const
 
 function Cta() {
@@ -75,59 +72,75 @@ function Cta() {
   )
 }
 
+/** Headline block for the left rail. One oversized mark behind the type is the only decoration. */
+function HomeRail() {
+  return () => (
+    <>
+      <div class="rail-art" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M2.5 5h19L12 20.5z" fill="currentColor" />
+        </svg>
+      </div>
+      <a class="rail-pill" href="/docs" {...PREFETCH}>
+        <span>Closed beta</span>
+        <span class="bar" aria-hidden="true">|</span>
+        <b>Read the docs</b>
+        <span aria-hidden="true">→</span>
+      </a>
+      <h1 class="rail-title">
+        Agentic
+        <br />
+        infrastructure <span class="dim">for Discord.</span>
+      </h1>
+      <div class="cta">
+        {inviteHref ? (
+          <>
+            <a class="btn btn-primary" href={inviteHref}>Add to Discord</a>
+            <a class="btn" href="/dashboard" {...CONSOLE}>Open Console</a>
+          </>
+        ) : (
+          <>
+            <a class="btn btn-primary" href="/dashboard" {...CONSOLE}>Open Console</a>
+            <a class="btn" href="/docs" {...PREFETCH}>Read the docs</a>
+          </>
+        )}
+      </div>
+    </>
+  )
+}
+
 export function HomePage() {
   return () => (
-    <Layout>
-      <section class="landing" aria-label="Agentic infrastructure">
-        <div>
-          <p class="display">
-            Agentic
-            <br />
-            infrastructure
-          </p>
+    <Layout rail={<HomeRail />}>
+      <section class="block first" id="intro">
+        <div class="head">
+          <h2>Overview</h2>
         </div>
-        <div class="a-mid">
-          <div class="tile">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M2.5 5h19L12 20.5z" fill="currentColor" />
-            </svg>
-          </div>
-        </div>
-        <div class="a-right">
-          <ul class="a-list">
-            <li>For server owners</li>
-            <li>To run goals in plain language</li>
-            <li>Automated by agents</li>
-          </ul>
-        </div>
-        <ScrollCue />
-      </section>
-
-      <section class="hero" id="intro">
-        <span class="eyebrow">Agentic infrastructure for Discord</span>
-        <h1>
-          Give your server <em>agents that do the work.</em>
-        </h1>
-        <p class="lead">
-          State a goal in plain language. A dedicated AI agent audits it, researches, decides each next step and acts, a
-          durable run keeps it going, and your bot carries out the Discord side, in seconds or across hours.
+        <p class="lead big">
+          Give your server <b>agents that do the work.</b> State a goal in plain language. A dedicated AI agent audits
+          it, researches, decides each next step and acts, a durable run keeps it going, and your bot carries out the
+          Discord side.
         </p>
-        <Cta />
         <div class="demo" role="group" aria-label="Example request">
-          <div class="bubble">Post the tournament rules in #announcements, then lock #signups in 2 hours</div>
-          <div class="row">
-            <span class="badge s-waiting">
-              <i />
-              Waiting
-            </span>
-            <span class="mono">2 steps · resumes in 2h</span>
+          <div class="demo-bar">
+            <span>Example request</span>
           </div>
-          <div class="steps-mini">
-            <div>
-              <b>1</b> post the rules in #announcements <span class="done">· done</span>
+          <div class="demo-body">
+            <div class="bubble">Create a #tournament-rules channel and post the rules in it</div>
+            <div class="row">
+              <span class="badge s-completed">
+                <i />
+                Completed
+              </span>
+              <span class="mono">2 steps</span>
             </div>
-            <div>
-              <b>2</b> wait 2 hours, then lock #signups from @everyone
+            <div class="steps-mini">
+              <div>
+                <b>1</b> create #tournament-rules <span class="done">· done</span>
+              </div>
+              <div>
+                <b>2</b> post the rules in #tournament-rules <span class="done">· done</span>
+              </div>
             </div>
           </div>
         </div>
@@ -138,10 +151,9 @@ export function HomePage() {
           <h2>Infrastructure, not another bot.</h2>
           <p>Four parts work together so a request can be checked, planned and finished without you babysitting it.</p>
         </div>
-        <div class="grid four">
+        <div class="cells two">
           {PARTS.map(([title, text]) => (
-            <div class="card" key={title}>
-              <div class="bar" aria-hidden="true"></div>
+            <div class="cell" key={title}>
               <h3>{title}</h3>
               <p>{text}</p>
             </div>
@@ -154,10 +166,9 @@ export function HomePage() {
           <h2>What your agents can do.</h2>
           <p>Anything an owner does by hand, from one sentence.</p>
         </div>
-        <div class="grid">
+        <div class="cells two">
           {CAPABILITIES.map(([title, text]) => (
-            <div class="card" key={title}>
-              <div class="bar" aria-hidden="true"></div>
+            <div class="cell" key={title}>
               <h3>{title}</h3>
               <p>{text}</p>
             </div>
@@ -169,33 +180,24 @@ export function HomePage() {
         <div class="head">
           <h2>Three steps. No setup screens.</h2>
         </div>
-        <div class="steps">
-          <div class="step">
-            <h3>Add the bot</h3>
-            <p>
-              Click "Add to Discord" to install the bot in your server. No configuration needed.
-            </p>
-          </div>
-          <div class="step">
-            <h3>State the goal</h3>
-            <p>Write it the way you would tell a person. No commands to learn.</p>
-          </div>
-          <div class="step">
-            <h3>Let the agents run it</h3>
-            <p>Your agent audits and plans it, the run executes it, and the status updates live.</p>
-          </div>
+        <div class="cells">
+          {STEPS.map(([title, text], index) => (
+            <div class="cell" key={title}>
+              <span class="num">{"0" + String(index + 1)}</span>
+              <h3>{title}</h3>
+              <p>{text}</p>
+            </div>
+          ))}
         </div>
       </section>
 
       <section class="block">
-        <div class="grid split">
-          <div>
-            <h2>Autonomy with the owner in control.</h2>
-            <p class="lead">
-              Agents are only worth it if you can trust them. These protections are built in, not bolted on.
-            </p>
-          </div>
-          <ul class="checks">
+        <div class="head">
+          <h2>Autonomy with the owner in control.</h2>
+          <p>Agents are only worth it if you can trust them. These protections are built in, not bolted on.</p>
+        </div>
+        <div class="plus-box">
+          <ul class="plus-list">
             {SAFEGUARDS.map(([title, text]) => (
               <li key={title}>
                 <span>
@@ -209,9 +211,7 @@ export function HomePage() {
 
       <section class="band">
         <h2>Put agents to work on your server.</h2>
-        <p class="lead">
-          Add the bot and hand over your first goal.
-        </p>
+        <p class="lead">Add the bot and hand over your first goal.</p>
         <Cta />
       </section>
     </Layout>
