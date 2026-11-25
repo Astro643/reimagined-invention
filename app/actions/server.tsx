@@ -1,4 +1,6 @@
 import { auth } from "../lib/auth.ts"
+import { mailConfigured } from "../lib/mail.ts"
+import { effectivePlan } from "../lib/tier.ts"
 import { sql } from "../lib/db.ts"
 import { ping } from "../lib/store.ts"
 import { generateAgentPlan, generateAgentResponse, parseAgentPlanInput } from "../lib/agent.ts"
@@ -15,7 +17,11 @@ const MAX_HISTORY = 8
 
 interface SessionUser {
   id: string
+  email?: string
+  emailVerified?: boolean
   plan?: string | null
+  trialUsed?: boolean | null
+  trialEndsAt?: string | Date | null
 }
 
 async function sessionUser(request: Request): Promise<SessionUser | null> {
@@ -34,13 +40,40 @@ function bearerOk(request: Request) {
 }
 
 // Session cookie OR the operator's bearer key (used by the Discord bot).
-async function requireActor(request: Request): Promise<SessionUser | "agent" | null> {
+// Returns "unverified" when the account must confirm its email first.
+async function requireActor(request: Request): Promise<SessionUser | "agent" | "unverified" | null> {
   if (bearerOk(request)) return "agent"
-  return sessionUser(request)
+  const user = await sessionUser(request)
+  if (user && mailConfigured() && !user.emailVerified) return "unverified"
+  return user
 }
 
 function unauthorized() {
   return Response.json({ detail: "Authentication required. Please log in to use the Console." }, { status: 401 })
+}
+
+function actorDenied(actor: SessionUser | "agent" | "unverified" | null) {
+  if (actor === "unverified") {
+    return Response.json(
+      { detail: "Please verify your email to continue.", code: "EMAIL_UNVERIFIED" },
+      { status: 403 },
+    )
+  }
+  if (actor === null) return unauthorized()
+  if (actor !== "agent" && !effectivePlan(actor)) {
+    return Response.json(
+      { detail: "Choose a plan to continue.", code: "PLAN_REQUIRED" },
+      { status: 403 },
+    )
+  }
+  return null
+}
+
+// requireActor + gate checks in one step: returns the actor or a denial Response.
+async function actorOrDeny(request: Request): Promise<SessionUser | "agent" | Response> {
+  const actor = await requireActor(request)
+  const denied = actorDenied(actor)
+  return denied ?? (actor as SessionUser | "agent")
 }
 
 // Free tier: core toolsets (no browser automation) and a daily run cap.
@@ -50,15 +83,15 @@ const FREE_DAILY_RUNS = () => {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 10
 }
 
-function isFreeActor(actor: SessionUser | "agent") {
-  return actor !== "agent" && actor.plan === "free"
+function isFreeActor(actor: SessionUser | "agent" | "unverified") {
+  return actor !== "agent" && actor !== "unverified" && effectivePlan(actor) === "free"
 }
 
 const FREE_BLOCKED_TOOLS = new Set(["sandbox_browse"])
 
 async function ownedRun(request: Request, id: string): Promise<RunRow | Response> {
-  const actor = await requireActor(request)
-  if (!actor) return unauthorized()
+  const actor = await actorOrDeny(request)
+  if (actor instanceof Response) return actor
   let run: RunRow | null = null
   try {
     run = await getRun(id)
@@ -128,8 +161,8 @@ function validPrompt(value: unknown, max = MAX_PROMPT) {
 }
 
 export async function agentPreview(context: { request: Request }) {
-  const actor = await requireActor(context.request)
-  if (!actor) return unauthorized()
+  const actor = await actorOrDeny(context.request)
+  if (actor instanceof Response) return actor
   const body = await readJson(context.request)
   if (!validPrompt(body.prompt)) {
     return Response.json({ detail: `prompt must be a non-empty string of at most ${MAX_PROMPT} characters` }, { status: 400 })
@@ -158,8 +191,8 @@ export async function agentPreview(context: { request: Request }) {
 }
 
 export async function agentExecute(context: { request: Request }) {
-  const actor = await requireActor(context.request)
-  if (!actor) return unauthorized()
+  const actor = await actorOrDeny(context.request)
+  if (actor instanceof Response) return actor
   const body = await readJson(context.request)
   const plan = parseAgentPlanInput(body.agent_plan)
   if (!plan) return Response.json({ detail: "a valid agent_plan from preview is required" }, { status: 400 })
@@ -247,8 +280,8 @@ export async function approveRun(context: { request: Request; params: { id: stri
 }
 
 export async function preview(context: { request: Request }) {
-  const actor = await requireActor(context.request)
-  if (!actor) return unauthorized()
+  const actor = await actorOrDeny(context.request)
+  if (actor instanceof Response) return actor
   const body = await readJson(context.request)
   if (!validPrompt(body.prompt)) {
     return Response.json({ detail: "prompt must be between 1 and 5000 characters" }, { status: 400 })
@@ -263,8 +296,8 @@ export async function preview(context: { request: Request }) {
 }
 
 export async function execute(context: { request: Request }) {
-  const actor = await requireActor(context.request)
-  if (!actor) return unauthorized()
+  const actor = await actorOrDeny(context.request)
+  if (actor instanceof Response) return actor
   const body = await readJson(context.request)
   const userId = actor === "agent" ? "agent-api" : actor.id
   if (isFreeActor(actor)) {

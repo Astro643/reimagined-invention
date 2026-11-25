@@ -3,19 +3,19 @@ import type { Handle } from "remix/component"
 import type { PageMeta } from "../lib/page.ts"
 
 export const meta: PageMeta = {
-  title: "Reset password · Controller",
+  title: "Forgot password · Controller",
   robots: "noindex",
   styles: ["/site.css"],
 }
 
-export interface ResetPageProps {
+export interface ForgotPageProps {
   error?: string
-  done?: boolean
+  sent?: boolean
 }
 
-export function ResetPage(handle: Handle<ResetPageProps>) {
+export function ForgotPage(handle: Handle<ForgotPageProps>) {
   return () => {
-    const { error, done } = handle.props
+    const { error, sent } = handle.props
     return (
       <main class="auth-wrap">
         <section class="auth-hero">
@@ -35,32 +35,24 @@ export function ResetPage(handle: Handle<ResetPageProps>) {
           </p>
         </section>
         <section class="auth-card">
-          <h2>{"Reset password"}</h2>
-          <p class="sub">{"Enter your user ID, recovery phrase, and a new password."}</p>
+          <h2>{"Reset your password"}</h2>
+          <p class="sub">{"Enter your account email — we'll send you a reset link."}</p>
           {error ? <p class="auth-err">{error}</p> : null}
-          {done ? (
+          {sent ? (
             <>
-              <p class="auth-ok">{"Password updated. You can sign in now."}</p>
+              <p class="auth-ok">{"If that email has an account, a reset link is on its way. Check your inbox."}</p>
               <p class="auth-alt">
                 <a href="/login">{"Back to sign in"}</a>
               </p>
             </>
           ) : (
-            <form method="post" action="/reset" autoComplete="off">
+            <form method="post" action="/forgot" autoComplete="on">
               <label>
-                {"User ID"}
-                <input name="user_id" type="text" required autoComplete="off" />
-              </label>
-              <label>
-                {"Recovery phrase"}
-                <textarea name="phrase" required rows={3} autoComplete="off" />
-              </label>
-              <label>
-                {"New password"}
-                <input name="password" type="password" required minLength={8} autoComplete="new-password" />
+                {"Email"}
+                <input name="email" type="email" required autoComplete="email" />
               </label>
               <button class="btn btn-primary" type="submit">
-                {"Reset password"}
+                {"Send reset link"}
               </button>
             </form>
           )}

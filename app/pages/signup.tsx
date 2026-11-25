@@ -41,8 +41,8 @@ export function SignupPage(handle: Handle<SignupPageProps>) {
           <form method="post" action="/signup" autoComplete="on">
             {next ? <input type="hidden" name="next" value={next} /> : null}
             <label>
-              {"Username"}
-              <input name="username" type="text" required autoComplete="username" minLength={3} maxLength={30} pattern="[a-zA-Z0-9_.\-]+" />
+              {"Email"}
+              <input name="email" type="email" required autoComplete="email" />
             </label>
             <label>
               {"Password"}
@@ -53,7 +53,7 @@ export function SignupPage(handle: Handle<SignupPageProps>) {
             </button>
           </form>
           <p class="auth-alt">
-            {"We'll give you a user ID and a recovery phrase — keep both safe."}
+            {"We'll email you a verification link after you pick a plan."}
           </p>
           <p class="auth-alt">
             {"Already have an account? "}

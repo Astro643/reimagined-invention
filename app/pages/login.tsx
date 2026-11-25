@@ -41,8 +41,8 @@ export function LoginPage(handle: Handle<LoginPageProps>) {
           <form method="post" action="/login" autoComplete="on">
             {next ? <input type="hidden" name="next" value={next} /> : null}
             <label>
-              {"Username"}
-              <input name="username" type="text" required autoComplete="username" minLength={3} maxLength={30} />
+              {"Email"}
+              <input name="email" type="email" required autoComplete="email" />
             </label>
             <label>
               {"Password"}
@@ -53,7 +53,7 @@ export function LoginPage(handle: Handle<LoginPageProps>) {
             </button>
           </form>
           <p class="auth-alt">
-            <a href="/reset">{"Lost your recovery phrase? Reset password"}</a>
+            <a href="/forgot">{"Forgot your password? Reset it"}</a>
           </p>
           <p class="auth-alt">
             {"New here? "}

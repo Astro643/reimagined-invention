@@ -10,6 +10,9 @@ export const meta: PageMeta = {
 
 export interface PlanPageProps {
   error?: string
+  trialUsed?: boolean
+  currentPlan?: string | null
+  notice?: string
 }
 
 const TRIAL_BENEFITS = [
@@ -28,38 +31,47 @@ const FREE_BENEFITS = [
 
 export function PlanPage(handle: Handle<PlanPageProps>) {
   return () => {
-    const error = handle.props.error
+    const { error, trialUsed, currentPlan, notice } = handle.props
     return (
       <main class="tier-grid">
-        <section class="tier">
+        <section class={currentPlan === "trial" ? "tier tier-current" : "tier" + (trialUsed ? " disabled" : "")}>
           <div class="tier-head">
             <div>
               <h2>{"Trial"}</h2>
               <span class="price">{"30 days · full access"}</span>
             </div>
+            {currentPlan === "trial" ? <span class="tier-badge">{"Current plan"}</span> : null}
           </div>
           <ul>
             {TRIAL_BENEFITS.map((b) => (
               <li key={b}>{b}</li>
             ))}
           </ul>
-          <p class="warn">
-            {"Your account and all of its data will be permanently deleted from our system 30 days after signup."}
-          </p>
+          {trialUsed ? (
+            <p class="warn">{"You've already used your trial — it can't be claimed again."}</p>
+          ) : (
+            <p class="warn">
+              {"Full access for 30 days. When it ends, your plan resets and you choose again."}
+            </p>
+          )}
           {error ? <p class="auth-err">{error}</p> : null}
-          <form method="post" action="/plan">
-            <input type="hidden" name="plan" value="trial" />
-            <button class="btn btn-primary" type="submit">
-              {"Start trial"}
-            </button>
-          </form>
+          {notice ? <p class="auth-ok">{notice}</p> : null}
+          {trialUsed ? null : (
+            <form method="post" action="/plan">
+              <input type="hidden" name="plan" value="trial" />
+              <button class="btn btn-primary" type="submit">
+                {currentPlan ? "Switch to trial" : "Start trial"}
+              </button>
+            </form>
+          )}
         </section>
-        <section class="tier">
+        <section class={currentPlan === "free" ? "tier tier-current" : "tier"}>
           <div class="tier-head">
             <div>
               <h2>{"Free"}</h2>
               <span class="price">{"forever · core toolsets"}</span>
             </div>
+            {currentPlan === "free" ? <span class="tier-badge">{"Current plan"}</span> : null}
           </div>
           <ul>
             {FREE_BENEFITS.map((b) => (
@@ -67,12 +79,15 @@ export function PlanPage(handle: Handle<PlanPageProps>) {
             ))}
           </ul>
           {error ? <p class="auth-err">{error}</p> : null}
-          <form method="post" action="/plan">
-            <input type="hidden" name="plan" value="free" />
-            <button class="btn" type="submit">
-              {"Start free"}
-            </button>
-          </form>
+          {notice ? <p class="auth-ok">{notice}</p> : null}
+          {currentPlan === "free" ? null : (
+            <form method="post" action="/plan">
+              <input type="hidden" name="plan" value="free" />
+              <button class="btn" type="submit">
+                {currentPlan ? "Switch to free" : "Start free"}
+              </button>
+            </form>
+          )}
         </section>
       </main>
     )

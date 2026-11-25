@@ -316,3 +316,8 @@ details .ans p+p{margin-top:10px}
 .auth-card textarea:focus{border-color:var(--ink);box-shadow:0 0 0 3px rgba(0,0,0,.06)}
 .skip{position:absolute;left:-9999px;top:0;background:var(--ink);color:var(--canvas);padding:8px 14px;z-index:999;font-size:14px}
 .skip:focus{left:16px;top:16px}
+
+/* Plan switching */
+.tier-current{border-color:var(--ink)}
+.tier-badge{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--canvas);background:var(--ink);padding:6px 10px;border-radius:999px;white-space:nowrap}
+.dash-meta{display:flex;flex-direction:column;gap:6px;margin:18px 0}

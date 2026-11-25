@@ -16,14 +16,18 @@ Single Remix 3.2.0 app: marketing site + Console overlay + agent backend
 - Pages: `app/pages/*`; client entries: `app/ui/*` (`console.tsx` overlay,
   `support-widget.tsx`). Console opens via `[data-open-console]` links or ⌘K;
   `/dashboard` requires a session with `user.plan` and auto-opens it.
-- Auth: Better Auth (`app/lib/auth.ts`) — username+password (no email; the
-  username maps to a synthetic `*@users.local` address), no email verification,
-  Postgres via `pg` Pool, `dash()` infra plugin for analytics. Signup shows a
-  one-time user ID + 26-word recovery phrase (`user.recovery_hash`); `/reset`
-  verifies the phrase to set a new password. Signup is rate-limited to 3/IP/24h
-  (`signup_attempts` table). Login/signup/plan are native form posts; handler
-  mounted at `/api/auth/*` in `server.ts`. Tiers: trial (30-day wipe) and free
-  (core toolsets, no `sandbox_browse`, `FREE_RUNS_PER_DAY` cap, default 10).
+- Auth: Better Auth (`app/lib/auth.ts`) — email+password, Postgres via `pg`
+  Pool, `dash()` infra plugin for analytics. Email verification is sent after
+  plan selection (Postmark, `app/lib/mail.ts`) and enforced on dashboard + API
+  when `POSTMARK_API_KEY`/`POSTMARK_FROM` are set; `/forgot` + `/reset-password`
+  handle password resets via emailed links. Signup is rate-limited to 3/IP/24h
+  (`signup_attempts` table). Login/signup/plan/verify/forgot are native form
+  posts; handler mounted at `/api/auth/*` in `server.ts`.
+- Tiers (`app/lib/tier.ts`): trial = full access for 30 days (`trialEndsAt`,
+  latched `trialUsed` — once per account), free = core toolsets, no
+  `sandbox_browse`, `FREE_RUNS_PER_DAY` cap (default 10). `/plan` allows
+  switching anytime; `expireTrials()` (hourly, in `purge`) nulls expired trial
+  plans so users re-choose — trial shows grayed out after use.
 - Agent pipeline (in-process, durable via Postgres): `app/lib/runner.ts`
   executes agent runs (multi-turn tool loop from `app/lib/agent.ts` +
   `app/lib/agent-tools.ts`) and shell-plan runs (`app/lib/plan.ts` steps in an
@@ -41,7 +45,7 @@ Single Remix 3.2.0 app: marketing site + Console overlay + agent backend
 
 ## Env vars (see .env.example)
 
-`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `BETTER_AUTH_API_KEY` (optional, infra dashboard), `UPSTASH_BOX_API_KEY`,
+`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `BETTER_AUTH_API_KEY` (optional, infra dashboard), `POSTMARK_API_KEY`, `POSTMARK_FROM`, `UPSTASH_BOX_API_KEY`,
 `GEMINI_API_KEY` (or `GEMINI_API_KEYS`/`GEMINI_API_KEY_1..4`), `DISCORD_TOKEN`,
 `DISCORD_GUILD_ID`, optional `AGENT_API_KEY`, `MODEL_*`, `PORT`, `NODE_ENV`.
 

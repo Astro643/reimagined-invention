@@ -2,6 +2,8 @@ import { betterAuth } from "better-auth"
 import { dash } from "@better-auth/infra"
 import { Pool } from "pg"
 
+import { sendMail } from "./mail.ts"
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 5,
@@ -23,11 +25,41 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
+    sendResetPassword: async ({ user, url }) => {
+      await sendMail({
+        to: user.email,
+        subject: "Reset your Controller password",
+        html: `<p>Hi ${user.name || "there"},</p><p><a href="${url}">Click here to reset your password</a>. The link expires in 1 hour.</p><p>If you didn't request this, ignore this email.</p>`,
+      })
+    },
+    resetPasswordTokenExpiresIn: 3600,
+  },
+  emailVerification: {
+    // Verification is triggered after plan selection (see controller), not at signup.
+    sendOnSignUp: false,
+    sendVerificationEmail: async ({ user, url }) => {
+      await sendMail({
+        to: user.email,
+        subject: "Verify your Controller email",
+        html: `<p>Hi ${user.name || "there"},</p><p><a href="${url}">Click here to verify your email</a>.</p><p>If you didn't create a Controller account, ignore this email.</p>`,
+      })
+    },
   },
   user: {
     additionalFields: {
       plan: {
         type: "string",
+        required: false,
+        input: false,
+      },
+      trialUsed: {
+        type: "boolean",
+        required: false,
+        input: false,
+        defaultValue: false,
+      },
+      trialEndsAt: {
+        type: "date",
         required: false,
         input: false,
       },
@@ -39,3 +71,15 @@ export const auth = betterAuth({
     dash({ apiKey: process.env.BETTER_AUTH_API_KEY }),
   ],
 })
+
+// Re-exported for the controller: after a plan is chosen we email a
+// verification link; better-auth's send-verification endpoint does the work.
+export async function sendVerificationForUser(email: string, callbackURL: string) {
+  try {
+    await auth.api.sendVerificationEmail({
+      body: { email, callbackURL },
+    })
+  } catch (error) {
+    console.error("[auth] sendVerificationEmail failed:", error)
+  }
+}

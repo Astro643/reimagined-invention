@@ -2,7 +2,7 @@ import * as http from "node:http"
 import { createRequestListener } from "remix/node-fetch-server"
 
 import { auth } from "./app/lib/auth.ts"
-import { initDb, purgeStale } from "./app/lib/db.ts"
+import { expireTrials, initDb, purgeStale } from "./app/lib/db.ts"
 import { resumeRuns } from "./app/lib/runner.ts"
 import { assets } from "./app/assets.ts"
 import { router } from "./app/router.ts"
@@ -10,7 +10,10 @@ import { router } from "./app/router.ts"
 const port = Number.parseInt(process.env.PORT ?? "", 10) || 5173
 const PURGE_EVERY_MS = 60 * 60 * 1000
 
-const purge = () => purgeStale().catch((error) => console.error("[purge] failed:", error))
+const purge = () =>
+  Promise.all([purgeStale(), expireTrials()]).catch((error) =>
+    console.error("[purge] failed:", error),
+  )
 
 // Postgres can lag behind the web service on cold starts; retry init so auth
 // and runs recover without a manual restart.

@@ -1,37 +1,48 @@
 import { createController } from "remix/router"
 import { redirect } from "remix/response/redirect"
-import { timingSafeEqual } from "node:crypto"
 
 import { assets } from "../assets.ts"
-import { sql, signupIpAllowed, recordSignupIp, getUserByEmail, getUserById, setRecoveryHash, setUserPassword } from "../lib/db.ts"
-import {
-  generateRecoveryPhrase,
-  hashRecoveryPhrase,
-  normalizeUsername,
-  usernameToEmail,
-  validUsername,
-} from "../lib/identity.ts"
-import { hashPassword } from "better-auth/crypto"
-import { auth } from "../lib/auth.ts"
+import { signupIpAllowed, recordSignupIp, setUserPlan } from "../lib/db.ts"
+import { mailConfigured } from "../lib/mail.ts"
+import { auth, sendVerificationForUser } from "../lib/auth.ts"
+import { canClaimTrial, effectivePlan } from "../lib/tier.ts"
 import { routes } from "../routes.ts"
 import { AboutPage, meta as aboutMeta } from "../pages/about.tsx"
 import { DashboardPage, meta as dashboardMeta } from "../pages/dashboard.tsx"
 import { DocsPage, meta as docsMeta } from "../pages/docs.tsx"
+import { ForgotPage, meta as forgotMeta } from "../pages/forgot.tsx"
 import { HomePage, meta as homeMeta } from "../pages/home.tsx"
 import { LoginPage, meta as loginMeta } from "../pages/login.tsx"
 import { NotFoundPage, meta as notFoundMeta } from "../pages/not-found.tsx"
 import { PlanPage, meta as planMeta } from "../pages/plan.tsx"
 import { PrivacyPage, meta as privacyMeta } from "../pages/privacy.tsx"
+import { ResetPasswordPage, meta as resetPasswordMeta } from "../pages/reset-password.tsx"
 import { SignupPage, meta as signupMeta } from "../pages/signup.tsx"
-import { ResetPage, meta as resetMeta } from "../pages/reset.tsx"
 import { TermsPage, meta as termsMeta } from "../pages/terms.tsx"
-import { WelcomePage, meta as welcomeMeta } from "../pages/welcome.tsx"
+import { VerifyPage, meta as verifyMeta } from "../pages/verify.tsx"
 import { Document } from "./document.tsx"
 import * as serverActions from "./server.tsx"
 
 interface SessionUser {
   id: string
+  email?: string
+  emailVerified?: boolean
   plan?: string | null
+  trialUsed?: boolean | null
+  trialEndsAt?: string | Date | null
+}
+
+// Email verification is only enforced when mail is actually configured —
+// otherwise users could never receive the link and would be locked out.
+function verificationRequired() {
+  return mailConfigured()
+}
+
+// Where a signed-in user belongs: plan first, then email verification.
+function postAuthPath(user: SessionUser, fallback = "/dashboard") {
+  if (!effectivePlan(user)) return "/plan"
+  if (verificationRequired() && !user.emailVerified) return "/verify"
+  return fallback
 }
 
 async function requireUser(request: Request): Promise<SessionUser | null> {
@@ -102,7 +113,7 @@ export default createController(routes, {
     },
     async loginView(context) {
       const user = await requireUser(context.request)
-      if (user) return redirect(user.plan ? "/dashboard" : "/plan", 303)
+      if (user) return redirect(postAuthPath(user), 303)
       const next = safeNext(new URL(context.request.url).searchParams.get("next"))
       return context.render(
         <Document meta={loginMeta}>
@@ -112,25 +123,25 @@ export default createController(routes, {
     },
     async loginSubmit(context) {
       const form = await context.request.formData()
-      const username = normalizeUsername(String(form.get("username") ?? ""))
+      const email = String(form.get("email") ?? "").trim().toLowerCase()
       const password = String(form.get("password") ?? "")
       const next = safeNext(form.get("next"))
-      if (!validUsername(username)) {
+      if (!email || !password) {
         return context.render(
           <Document meta={loginMeta}>
-            <LoginPage error={"Enter your username."} next={next === "/dashboard" ? undefined : next} />
+            <LoginPage error={"Enter your email and password."} next={next === "/dashboard" ? undefined : next} />
           </Document>,
           { status: 400 },
         )
       }
       try {
         const result = await auth.api.signInEmail({
-          body: { email: usernameToEmail(username), password },
+          body: { email, password },
           headers: context.request.headers,
           returnHeaders: true,
         })
-        const plan = (result.response.user as { plan?: string }).plan
-        return authRedirect(plan ? next : "/plan", result.headers)
+        const u = result.response.user as SessionUser
+        return authRedirect(next === "/dashboard" ? postAuthPath(u) : next, result.headers)
       } catch (error) {
         console.error("[auth] login failed:", error)
         return context.render(
@@ -143,7 +154,7 @@ export default createController(routes, {
     },
     async signupView(context) {
       const user = await requireUser(context.request)
-      if (user) return redirect(user.plan ? "/dashboard" : "/plan", 303)
+      if (user) return redirect(postAuthPath(user), 303)
       const next = safeNext(new URL(context.request.url).searchParams.get("next"))
       return context.render(
         <Document meta={signupMeta}>
@@ -153,13 +164,13 @@ export default createController(routes, {
     },
     async signupSubmit(context) {
       const form = await context.request.formData()
-      const username = normalizeUsername(String(form.get("username") ?? ""))
+      const email = String(form.get("email") ?? "").trim().toLowerCase()
       const password = String(form.get("password") ?? "")
       const next = safeNext(form.get("next"))
-      if (!validUsername(username)) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 8) {
         return context.render(
           <Document meta={signupMeta}>
-            <SignupPage error={"Username must be 3-30 characters: lowercase letters, numbers, dot, dash or underscore."} next={next === "/dashboard" ? undefined : next} />
+            <SignupPage error={"Enter a valid email and an 8+ character password."} next={next === "/dashboard" ? undefined : next} />
           </Document>,
           { status: 400 },
         )
@@ -181,27 +192,20 @@ export default createController(routes, {
         // If the limiter table is unavailable, don't block signups — log and continue.
         console.error("[auth] signup ip check failed:", error)
       }
-      const phrase = generateRecoveryPhrase()
       try {
         const result = await auth.api.signUpEmail({
-          body: { name: username, email: usernameToEmail(username), password },
+          body: { name: email.split("@")[0], email, password },
           headers: context.request.headers,
           returnHeaders: true,
         })
         try {
           await recordSignupIp(ip)
-          const userId = (result.response.user as { id?: string } | undefined)?.id
-          if (userId) await setRecoveryHash(userId, hashRecoveryPhrase(phrase))
         } catch (error) {
-          console.error("[auth] signup ip/hash record failed:", error)
+          console.error("[auth] signup ip record failed:", error)
         }
-        // Show the one-time credentials screen directly, carrying the session
-        // cookie forward so the user is already logged in.
-        const res = context.render(
-          <Document meta={welcomeMeta}>
-            <WelcomePage userId={(result.response.user as { id?: string } | undefined)?.id ?? ""} phrase={phrase} />
-          </Document>,
-        )
+        // Carry the session cookie forward; plan selection (and the
+        // verification email) happens next.
+        const res = redirect("/plan", 303)
         for (const cookie of getSetCookies(result.headers)) res.headers.append("set-cookie", cookie)
         return res
       } catch (error) {
@@ -217,10 +221,12 @@ export default createController(routes, {
     async planView(context) {
       const user = await requireUser(context.request)
       if (!user) return redirect("/login", 303)
-      if (user.plan) return redirect("/dashboard", 303)
       return context.render(
         <Document meta={planMeta}>
-          <PlanPage />
+          <PlanPage
+            trialUsed={canClaimTrial(user) === false}
+            currentPlan={effectivePlan(user)}
+          />
         </Document>,
       )
     },
@@ -229,69 +235,125 @@ export default createController(routes, {
       if (!user) return redirect("/login", 303)
       const form = await context.request.formData()
       const plan = String(form.get("plan") ?? "")
-      if (plan !== "trial" && plan !== "free") {
-        return context.render(
+      const current = effectivePlan(user)
+      const renderError = (error: string, status = 400) =>
+        context.render(
           <Document meta={planMeta}>
-            <PlanPage error={"That plan is not available yet."} />
+            <PlanPage error={error} trialUsed={canClaimTrial(user) === false} currentPlan={current} />
           </Document>,
-          { status: 400 },
+          { status },
         )
+      if (plan !== "trial" && plan !== "free") {
+        return renderError("That plan is not available yet.")
+      }
+      if (plan === "trial" && !canClaimTrial(user)) {
+        return renderError("Your trial has already been used — the Free plan is still available.")
+      }
+      if (current === plan) {
+        return redirect("/dashboard", 303)
       }
       try {
-        await sql`UPDATE "user" SET plan = 'trial', "updatedAt" = now() WHERE id = ${user.id}`
+        const ok = await setUserPlan(user.id, plan)
+        if (!ok) {
+          return renderError("Your trial has already been used — the Free plan is still available.")
+        }
       } catch (error) {
         console.error("[auth] plan update failed:", error)
+        return renderError("Could not save your plan. Please try again.", 500)
+      }
+      // First plan choice triggers the verification email (when mail is set up).
+      if (verificationRequired() && !user.emailVerified && user.email) {
+        await sendVerificationForUser(user.email, "/dashboard")
         return context.render(
-          <Document meta={planMeta}>
-            <PlanPage error={"Could not save your plan. Please try again."} />
+          <Document meta={verifyMeta}>
+            <VerifyPage email={user.email} sent />
           </Document>,
-          { status: 500 },
         )
       }
       return redirect("/dashboard", 303)
     },
-    async resetView(context) {
+    async verifyView(context) {
+      const user = await requireUser(context.request)
+      if (!user) return redirect("/login", 303)
+      if (!verificationRequired() || user.emailVerified) return redirect(postAuthPath(user), 303)
       return context.render(
-        <Document meta={resetMeta}>
-          <ResetPage />
+        <Document meta={verifyMeta}>
+          <VerifyPage email={user.email} />
         </Document>,
       )
     },
-    async resetSubmit(context) {
+    async verifySubmit(context) {
+      const user = await requireUser(context.request)
+      if (!user) return redirect("/login", 303)
+      if (user.email && !user.emailVerified) {
+        await sendVerificationForUser(user.email, "/dashboard")
+      }
+      return context.render(
+        <Document meta={verifyMeta}>
+          <VerifyPage email={user.email} sent />
+        </Document>,
+      )
+    },
+    async forgotView(context) {
+      return context.render(
+        <Document meta={forgotMeta}>
+          <ForgotPage />
+        </Document>,
+      )
+    },
+    async forgotSubmit(context) {
       const form = await context.request.formData()
-      const userId = String(form.get("user_id") ?? "").trim()
-      const phrase = String(form.get("phrase") ?? "")
+      const email = String(form.get("email") ?? "").trim().toLowerCase()
+      if (email) {
+        try {
+          await auth.api.requestPasswordReset({
+            body: { email, redirectTo: "/reset-password" },
+          })
+        } catch (error) {
+          console.error("[auth] password reset request failed:", error)
+        }
+      }
+      // Always show the same response so the endpoint can't probe accounts.
+      return context.render(
+        <Document meta={forgotMeta}>
+          <ForgotPage sent />
+        </Document>,
+      )
+    },
+    async resetPasswordView(context) {
+      const token = new URL(context.request.url).searchParams.get("token") ?? ""
+      return context.render(
+        <Document meta={resetPasswordMeta}>
+          <ResetPasswordPage token={token || undefined} />
+        </Document>,
+      )
+    },
+    async resetPasswordSubmit(context) {
+      const form = await context.request.formData()
+      const token = String(form.get("token") ?? "")
       const password = String(form.get("password") ?? "")
       const fail = (error: string) =>
         context.render(
-          <Document meta={resetMeta}>
-            <ResetPage error={error} />
+          <Document meta={resetPasswordMeta}>
+            <ResetPasswordPage token={token} error={error} />
           </Document>,
           { status: 400 },
         )
-      if (!userId || !phrase.trim() || password.length < 8) {
-        return fail("User ID, recovery phrase and an 8+ character password are required.")
+      if (!token || password.length < 8) {
+        return fail("This reset link is invalid. Request a new one.")
       }
       try {
-        const user = await getUserById(userId)
-        const expected = user?.recovery_hash
-        const actual = hashRecoveryPhrase(phrase)
-        const ok =
-          !!expected &&
-          expected.length === actual.length &&
-          timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(actual, "hex"))
-        if (!user || !ok) {
-          return fail("That user ID and recovery phrase do not match.")
-        }
-        await setUserPassword(user.id, await hashPassword(password))
+        await auth.api.resetPassword({
+          body: { newPassword: password, token },
+        })
         return context.render(
-          <Document meta={resetMeta}>
-            <ResetPage done />
+          <Document meta={resetPasswordMeta}>
+            <ResetPasswordPage token={token} done />
           </Document>,
         )
       } catch (error) {
         console.error("[auth] password reset failed:", error)
-        return fail("Could not reset the password right now. Try again.")
+        return fail("This reset link is invalid or has expired. Request a new one.")
       }
     },
     async logout(context) {
@@ -308,10 +370,16 @@ export default createController(routes, {
     async dashboard(context) {
       const user = await requireUser(context.request)
       if (!user) return redirect("/login?next=/dashboard", 303)
-      if (!user.plan) return redirect("/plan", 303)
+      const plan = effectivePlan(user)
+      if (!plan) return redirect("/plan", 303)
+      if (verificationRequired() && !user.emailVerified) return redirect("/verify", 303)
       return context.render(
         <Document meta={dashboardMeta}>
-          <DashboardPage userId={user.id} />
+          <DashboardPage
+            email={user.email}
+            plan={plan}
+            trialEndsAt={user.trialEndsAt ? new Date(user.trialEndsAt).toISOString() : null}
+          />
         </Document>,
       )
     },

@@ -37,6 +37,9 @@ export async function initDb() {
   await sql`ALTER TABLE "user" ADD COLUMN IF NOT EXISTS plan text`
   // Recovery phrase hash for password resets (username-only accounts).
   await sql`ALTER TABLE "user" ADD COLUMN IF NOT EXISTS recovery_hash text`
+  // Plan tiering: trialUsed latches after one trial; trialEndsAt drives expiry.
+  await sql`ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "trialUsed" boolean NOT NULL DEFAULT false`
+  await sql`ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "trialEndsAt" timestamptz`
   await sql`
     CREATE TABLE IF NOT EXISTS "session" (
       id text PRIMARY KEY,
@@ -133,6 +136,33 @@ export async function getUserByEmail(email: string) {
 
 export async function setRecoveryHash(userId: string, hash: string) {
   await sql`UPDATE "user" SET recovery_hash = ${hash}, "updatedAt" = now() WHERE id = ${userId}`
+}
+
+// Sets the user's plan. Claiming trial latches trialUsed and starts the 30-day
+// clock; free clears the trial clock. Returns false when trial was already used.
+export async function setUserPlan(userId: string, plan: "trial" | "free") {
+  if (plan === "trial") {
+    const rows = await sql`
+      UPDATE "user"
+      SET plan = 'trial', "trialUsed" = true, "trialEndsAt" = now() + interval '30 days', "updatedAt" = now()
+      WHERE id = ${userId} AND "trialUsed" = false
+      RETURNING id
+    `
+    return rows.length > 0
+  }
+  await sql`
+    UPDATE "user" SET plan = 'free', "trialEndsAt" = NULL, "updatedAt" = now() WHERE id = ${userId}
+  `
+  return true
+}
+
+// Hourly sweep: expired trials lose their plan and must choose again
+// (trial stays grayed out via trialUsed).
+export async function expireTrials() {
+  await sql`
+    UPDATE "user" SET plan = NULL, "updatedAt" = now()
+    WHERE plan = 'trial' AND "trialEndsAt" IS NOT NULL AND "trialEndsAt" < now()
+  `
 }
 
 export async function countRecentRuns(userId: string) {
