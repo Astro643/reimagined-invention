@@ -2,6 +2,12 @@ import { Destination, NetworkPolicy, Rule, Sandbox } from "microsandbox"
 
 import { kvDel, kvGet, kvSet } from "./store.ts"
 
+// An API key implies managed-cloud intent: without MSB_BACKEND the SDK would
+// try to boot local microVMs, which don't exist on a hosted deploy.
+if (process.env.MSB_API_KEY && !process.env.MSB_BACKEND) {
+  process.env.MSB_BACKEND = "remote"
+}
+
 const STEP_TIMEOUT_MS = 120_000
 const BOX_KEY = (runId: string) => `box:${runId}`
 const BOX_NAME = (runId: string) => `run-${runId.slice(0, 8)}`
