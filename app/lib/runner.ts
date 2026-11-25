@@ -1,8 +1,8 @@
 import { getRun, getRunStatus, listResumableRuns, saveRunState, setRunApproval, setRunStatus, type RunRow } from "./db.ts"
 import {
-  APPROVAL_TOOLS,
   closeBrowserTab,
   executeAgentTool,
+  requiresApproval,
   type AgentToolCall,
   type AgentToolResult,
 } from "./agent-tools.ts"
@@ -203,7 +203,7 @@ async function runAgent(runId: string) {
         call = turn.call
       }
 
-      if (APPROVAL_TOOLS.has(call.tool)) {
+      if (requiresApproval(call.tool, call.arguments)) {
         const decision = await awaitApproval(runId, call)
         if (decision === "cancelled") {
           await finishRun(runId, "cancelled", { summary: plan.summary, steps: state.steps, answer: "Cancelled by owner." })

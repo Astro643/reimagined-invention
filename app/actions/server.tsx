@@ -4,7 +4,7 @@ import { effectivePlan } from "../lib/tier.ts"
 import { sql } from "../lib/db.ts"
 import { ping } from "../lib/store.ts"
 import { generateAgentPlan, generateAgentResponse, parseAgentPlanInput } from "../lib/agent.ts"
-import { APPROVAL_TOOLS } from "../lib/agent-tools.ts"
+import { requiresApproval } from "../lib/agent-tools.ts"
 import { knowledgeSystem } from "../lib/knowledge.ts"
 import { generate, keyCount, MODELS } from "../lib/gemini.ts"
 import { parsePlan } from "../lib/plan.ts"
@@ -180,7 +180,7 @@ export async function agentPreview(context: { request: Request }) {
       steps: result.steps.map((step) => ({
         label: step.label,
         action: step.tool,
-        requires_confirmation: APPROVAL_TOOLS.has(step.tool),
+        requires_confirmation: requiresApproval(step.tool, step.arguments),
       })),
       agent_plan: result,
     })
